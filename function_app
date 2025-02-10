@@ -1,0 +1,108 @@
+import logging
+import azure.functions as func
+import requests
+import json
+from azure.eventhub import EventHubProducerClient, EventData
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+import os
+
+app = func.FunctionApp()
+
+@app.timer_trigger(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=False, use_monitor=False)
+def financeApiFunction(myTimer: func.TimerRequest) -> None:
+    if myTimer.past_due:
+        logging.info('The timer is past due!')
+
+    logging.info('Python timer trigger function executed.')
+
+    # Event Hub Configuration
+    EVENT_HUB_NAME = os.getenv("EVENT_HUB_NAME")
+    EVENT_HUB_NAMESPACE = os.getenv("EVENT_HUB_NAMESPACE")
+
+    # Use Managed Identity of Function App
+    credential = DefaultAzureCredential()
+
+    # Initialize the Event Hub Producer
+    producer = EventHubProducerClient(
+        fully_qualified_namespace=EVENT_HUB_NAMESPACE,
+        eventhub_name=EVENT_HUB_NAME,
+        credential=credential
+    )
+
+    def send_event(event):
+        event_data_batch = producer.create_batch()
+        event_data_batch.add(EventData(json.dumps(event)))
+        producer.send_batch(event_data_batch)
+
+    # Function to handle the API response
+    def handle_response(response):
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return f"Error: {response.status_code}, {response.text}"
+
+    # Function to get stock data
+    def get_stock_data(base_url, api_key, symbol):
+        eod_url = f"{base_url}/eod"
+        params = {
+            "access_key": api_key,  # MarketStack uses 'access_key'
+            "symbols": symbol
+        }
+        response = requests.get(eod_url, params=params)
+        return handle_response(response)
+
+    # Flatten and merge the financial data
+    def flatten_data(stock_data):
+        if not stock_data or "data" not in stock_data:
+            return []
+
+        data_list = stock_data.get("data", [])
+        
+        flattened_data = [
+            {
+                "symbol": entry.get("symbol"),
+                "date": entry.get("date"),
+                "open": entry.get("open"),
+                "high": entry.get("high"),
+                "low": entry.get("low"),
+                "close": entry.get("close"),
+                "volume": entry.get("volume"),
+                "adjusted_close": entry.get("adj_close", entry.get("close"))  # MarketStack uses 'adj_close'
+            }
+            for entry in data_list
+        ]
+        return flattened_data
+
+    # Fetch secret from Key Vault
+    def get_secret_from_keyvault(vault_url, secret_name):
+        credential = DefaultAzureCredential()
+        secret_client = SecretClient(vault_url=vault_url, credential=credential)
+        retrieved_secret = secret_client.get_secret(secret_name)
+        return retrieved_secret.value
+
+    # Main function to fetch stock data
+    def fetch_financial_data():
+        base_url = "http://api.marketstack.com/v1"
+        stock_symbol = os.getenv("STOCK_SYMBOL", "AAPL")  # Default to AAPL if not set
+        
+        # Fetch the API key from Key Vault    
+        VAULT_URL = os.getenv("VAULT_URL")
+        API_KEY_SECRET_NAME = os.getenv("API_KEY_SECRET_NAME")
+        finance_api_key = get_secret_from_keyvault(VAULT_URL, API_KEY_SECRET_NAME)
+        
+        # Fetch stock data
+        stock_data = get_stock_data(base_url, finance_api_key, stock_symbol)
+        
+        # Flatten the data
+        formatted_data = flatten_data(stock_data)
+        
+        # Sending the merged data to Event Hub
+        for data in formatted_data:
+            send_event(data)
+
+    # Execute the data fetch
+    fetch_financial_data()
+
+    # Close the producer after sending all events
+    producer.close()
