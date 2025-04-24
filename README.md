@@ -20,18 +20,19 @@ This end-to-end streaming solution:
 
 ```mermaid
 graph TD;
-    A[Live Weather API] --> B[Azure Function App];
-    B --> C[Azure Event Hub];
-    C --> D[Azure Databricks Streaming Job];
-    C --> E[Microsoft Fabric Event Stream];
-    D --> F[Delta Lake Storage];
-    E --> G[Fabric Real-Time Intelligence];
-    G --> H[Kusto DB (Eventhouse)];
-    H --> I[Power BI Dashboard];
-    H --> J[Data Activator];
-    J --> K[Microsoft Teams / Email Alerts];
-    L[Azure Key Vault] --> B;
-    M[Cost Management] --> C;
+    A[🌐 Live Weather API] --> B[⚡ Azure Functions];
+    B --> C[🧱 Azure Databricks];
+    B --> D[🌀 Azure Event Hub];
+
+    D --> E[📥 Event Stream (Fabric)];
+    E --> F[📊 Real-Time Intelligence];
+    F --> G[📂 Eventhouse - Kusto DB];
+    G --> H[📈 Power BI];
+    G --> I[🔔 Data Activator];
+    I --> J[📨 Real-Time Alerts];
+
+    K[🔐 Key Vault] --> B;
+    L[💰 Cost Management] --> D;
 ```
 
 ---
