@@ -19,20 +19,46 @@ This end-to-end streaming solution:
 ## 📐 Architecture
 
 ```mermaid
-graph TD;
-    A[🌐 Live Weather API] --> B[⚡ Azure Functions];
-    B --> C[🧱 Azure Databricks];
-    B --> D[🌀 Azure Event Hub];
+graph LR
+    subgraph Live Weather
+        API((API))
+    end
 
-    D --> E[📥 Event Stream (Fabric)];
-    E --> F[📊 Real-Time Intelligence];
-    F --> G[📂 Eventhouse - Kusto DB];
-    G --> H[📈 Power BI];
-    G --> I[🔔 Data Activator];
-    I --> J[📨 Real-Time Alerts];
+    subgraph Azure Services
+        Databricks[Azure Databricks]
+        Functions[Azure Functions]
+        KeyVault[Key Vault]
+        CostManagement[Cost Management]
+    end
 
-    K[🔐 Key Vault] --> B;
-    L[💰 Cost Management] --> D;
+    subgraph Event Ingestion
+        EventHub[Event Hub]
+    end
+
+    subgraph Real-time Analytics
+        Eventhouse(Eventhouse)
+        EventhouseLabel[(Kusto DB)]
+        EventStream[Event Stream]
+        RealTimeIntelligence[Real-time Intelligence]
+        Eventhouse --> EventhouseLabel
+    end
+
+    subgraph Consumption & Action
+        PowerBI[Power BI]
+        DataActivator[Data Activator]
+        RealTimeAlerts((Real-time Alerts))
+    end
+
+    API --> Databricks
+    API --> Functions
+    Databricks --> EventHub
+    Functions --> EventHub
+    EventHub --> EventStream
+    EventStream --> RealTimeIntelligence
+    RealTimeIntelligence --> Eventhouse
+    Eventhouse --> PowerBI
+    Eventhouse --> DataActivator
+    DataActivator --> RealTimeAlerts
 ```
 
 ---
