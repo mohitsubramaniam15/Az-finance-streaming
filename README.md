@@ -1,18 +1,18 @@
 
-# 🌩️ Real-Time Weather Intelligence — Azure | Fabric | Event Hub | Databricks | Power BI
+# 📈 Real-Time Apple Stock Streaming — Azure | Event Hub | Databricks | Synapse | Power BI
 
-A cutting-edge data engineering project that captures **real-time weather data** from external APIs and streams it into **Microsoft Fabric** through **Azure Event Hubs**, **Azure Functions**, **Databricks**, and **Kusto DB**, visualized live in **Power BI**, and automated using **Data Activator**.
+An enterprise-grade data engineering pipeline that captures **real-time Apple stock prices** using the **MarketStack API**, ingests the data through **Azure Event Hubs**, transforms it in **Azure Databricks**, and visualizes insights in **Power BI** via **Azure Synapse**.
 
 ---
 
 ## 💡 Project Overview
 
 This end-to-end streaming solution:
-- Ingests real-time weather data using Azure Functions
-- Sends data to Azure Event Hub
-- Processes streaming data on Azure Databricks with Spark
-- Feeds data into Microsoft Fabric (Event Stream + Kusto DB)
-- Visualizes and alerts with Power BI and Data Activator
+- Ingests **Apple Inc. stock data** from MarketStack API
+- Sends live data to **Azure Event Hub**
+- Transforms and analyzes data in **Azure Databricks**
+- Stores and queries data via **Azure Synapse Analytics**
+- Visualizes KPIs and trends with **Power BI Dashboards**
 
 ---
 
@@ -20,58 +20,138 @@ This end-to-end streaming solution:
 
 ```mermaid
 graph LR
-    subgraph Live Weather
-        API((API))
+    subgraph MarketStack API
+        API((MarketStack API))
     end
 
-    subgraph Azure Services
+    subgraph Azure Ingestion
+        AzureFunction[Azure Functions]
+        EventHub[Azure Event Hubs]
+    end
+
+    subgraph Data Engineering
         Databricks[Azure Databricks]
-        Functions[Azure Functions]
-        KeyVault[Key Vault]
-        CostManagement[Cost Management]
+        Synapse[Azure Synapse]
     end
 
-    subgraph Event Ingestion
-        EventHub[Event Hub]
-    end
-
-    subgraph Real-time Analytics
-        Eventhouse(Eventhouse)
-        EventhouseLabel[(Kusto DB)]
-        EventStream[Event Stream]
-        RealTimeIntelligence[Real-time Intelligence]
-        Eventhouse --> EventhouseLabel
-    end
-
-    subgraph Consumption & Action
+    subgraph Visualization
         PowerBI[Power BI]
-        DataActivator[Data Activator]
-        RealTimeAlerts((Real-time Alerts))
     end
 
-    API --> Databricks
-    API --> Functions
-    Databricks --> EventHub
-    Functions --> EventHub
-    EventHub --> EventStream
-    EventStream --> RealTimeIntelligence
-    RealTimeIntelligence --> Eventhouse
-    Eventhouse --> PowerBI
-    Eventhouse --> DataActivator
-    DataActivator --> RealTimeAlerts
+    API --> AzureFunction
+    AzureFunction --> EventHub
+    EventHub --> Databricks
+    Databricks --> Synapse
+    Synapse --> PowerBI
 ```
 
 ---
 
-## 🔎 What is Microsoft Fabric?
+## 🔍 MarketStack API Ingestion
 
-**Microsoft Fabric** is a unified data platform that combines multiple services like:
-- **Event Stream**: Entry point for streaming data into Fabric.
-- **Real-Time Intelligence**: Component for processing and routing streaming data in near real-time.
-- **Kusto DB (Eventhouse)**: Time-series database built for fast queries over telemetry data.
-- **Power BI + Data Activator**: Dashboarding + real-time alerting engine.
+Data is collected from MarketStack's REST API in JSON format, focusing on Apple (AAPL) stock:
 
-Together, they provide scalable, low-latency analytics and automation.
+```json
+{
+  "symbol": "AAPL",
+  "date": "2024-12-01",
+  "open": 190.5,
+  "close": 193.2,
+  "high": 194.1,
+  "low": 189.7,
+  "volume": 83012000
+}
+```
+
+---
+
+## ⚙️ Azure Function for Real-Time Ingestion
+
+```python
+import os, requests, json
+from azure.eventhub import EventHubProducerClient, EventData
+
+def main(mytimer: func.TimerRequest) -> None:
+    api_url = "http://api.marketstack.com/v1/eod"
+    params = {
+        "access_key": os.environ["MARKETSTACK_API_KEY"],
+        "symbols": "AAPL",
+        "limit": 1
+    }
+    res = requests.get(api_url, params=params).json()
+    data = res["data"][0]
+
+    producer = EventHubProducerClient.from_connection_string(
+        conn_str=os.environ["EVENT_HUB_CONN_STR"],
+        eventhub_name="stock-stream"
+    )
+    batch = producer.create_batch()
+    batch.add(EventData(json.dumps(data)))
+    producer.send_batch(batch)
+```
+
+---
+
+## 🔄 Databricks Transformation (PySpark)
+
+```python
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import *
+
+schema = StructType([
+    StructField("symbol", StringType()),
+    StructField("date", StringType()),
+    StructField("open", DoubleType()),
+    StructField("close", DoubleType()),
+    StructField("high", DoubleType()),
+    StructField("low", DoubleType()),
+    StructField("volume", IntegerType())
+])
+
+df = (spark.readStream
+    .format("eventhubs")
+    .option("eventhubs.connectionString", "<EVENT_HUB_CONN_STR>")
+    .load()
+    .selectExpr("cast(body as string) as json")
+    .select(from_json(col("json"), schema).alias("data"))
+    .select("data.*"))
+
+df.writeStream.format("delta").outputMode("append").option("checkpointLocation", "/tmp/chk").start("/mnt/delta/apple_stock_data")
+```
+
+---
+
+## 📊 Synapse & Power BI Integration
+
+- Synapse reads the `delta` data as an external table.
+- Power BI connects via DirectQuery to the Synapse view.
+- Dashboards show live stock trends: open, close, high, low, and volume.
+
+---
+
+## 🔁 Real-Time Insights Use Cases
+
+- Price drop alerts
+- Volume surge monitoring
+- Daily/weekly volatility tracking
+
+---
+
+## ✅ Setup Steps
+
+1. Deploy Azure Function with MarketStack API integration
+2. Connect Event Hub to Function App
+3. Configure Databricks cluster & Delta Lake streaming
+4. Create external tables/views in Synapse
+5. Build Power BI dashboard from Synapse SQL endpoint
+
+---
+
+## 🔐 Security Practices
+
+- Use Azure Key Vault for API keys & Event Hub secrets
+- Enable logging/monitoring in Event Hub and Databricks
+- Schedule cost alerts via Azure Cost Management
 
 ---
 
@@ -89,97 +169,6 @@ Together, they provide scalable, low-latency analytics and automation.
 
 ---
 
-## 🧪 Azure Function Sample Code (Python)
+## 🛡 License
 
-```python
-import requests, os
-from azure.eventhub import EventHubProducerClient, EventData
-
-def main(mytimer: func.TimerRequest) -> None:
-    api_url = "https://api.weatherapi.com/v1/current.json"
-    params = {"key": os.environ["WEATHER_API_KEY"], "q": "London"}
-    res = requests.get(api_url, params=params).json()
-
-    producer = EventHubProducerClient.from_connection_string(
-        conn_str=os.environ["EVENT_HUB_CONN_STR"],
-        eventhub_name="weather-stream"
-    )
-    batch = producer.create_batch()
-    batch.add(EventData(str(res)))
-    producer.send_batch(batch)
-```
-
----
-
-## 🔁 Databricks PySpark Streaming Snippet
-
-```python
-from pyspark.sql.functions import from_json, col
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
-
-schema = StructType([
-    StructField("location", StructType([
-        StructField("name", StringType()),
-        StructField("country", StringType())
-    ])),
-    StructField("current", StructType([
-        StructField("temp_c", DoubleType()),
-        StructField("humidity", IntegerType()),
-        StructField("wind_kph", DoubleType())
-    ]))
-])
-
-df = (spark.readStream
-    .format("eventhubs")
-    .option("eventhubs.connectionString", "<EVENT_HUB_CONN_STR>")
-    .load()
-    .selectExpr("cast(body as string) as json")
-    .select(from_json(col("json"), schema).alias("data"))
-    .select("data.*"))
-
-df.writeStream.format("delta").outputMode("append").option("checkpointLocation", "/tmp/chk").start("/mnt/delta/weather_data")
-```
-
----
-
-## 🚨 Data Activator Use Case
-
-**Triggering real-time alerts** from weather conditions:
-
-- Condition: `temp_c > 38 OR wind_kph > 60`
-- Action: "Send Teams message to emergency channel"
-
----
-
-## 📊 Power BI Dashboard Insights
-
-- Current temperatures and trends by region
-- Max wind speeds & humidity anomalies
-- Hourly weather patterns with auto-refresh
-- Integration with Eventhouse as DirectQuery source
-
----
-
-## 🛠️ Setup Instructions
-
-1. Create Azure Function App and deploy ingestion code
-2. Set secrets in Azure Key Vault (API key, Event Hub connection string)
-3. Set up Azure Event Hub instance
-4. Import notebook into Databricks and run with Spark cluster
-5. Configure Microsoft Fabric Event Stream and Real-Time Intelligence
-6. Connect Power BI to Eventhouse (Kusto DB) table
-7. Create alert rules using Data Activator
-
----
-
-## 🔐 Security Best Practices
-
-- Always store secrets in **Azure Key Vault**
-- Enable **Managed Identity** for secure access
-- Monitor Event Hub throughput with **Cost Management**
-
----
-
-## 📄 License
-
-MIT License. Free to use, share, and build on.
+MIT License. Use, modify, and deploy freely.
