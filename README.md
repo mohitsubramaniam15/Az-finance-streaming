@@ -4,6 +4,9 @@
 An enterprise-grade data engineering pipeline that captures **real-time Apple stock prices** using the **MarketStack API**, ingests the data through **Azure Event Hubs**, transforms it in **Azure Databricks**, and visualizes insights in **Power BI** via **Azure Synapse**.
 
 ---
+## 📸 Power BI Dashboard Screenshot
+
+![Streaming Power BI Dashboard](https://github.com/mohitsubramaniam15/mohitsubramaniam15/raw/main/bi_screenshots/streaming_bi.png)
 
 ## 💡 Project Overview
 
